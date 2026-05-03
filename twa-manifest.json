@@ -1,0 +1,18 @@
+{
+  "packageId": "com.nexus.boost.app",
+  "host": "nexus-boost.com",
+  "name": "Nexus Boost App",
+  "launcherName": "NexusBoost",
+  "display": "standalone",
+  "themeColor": "#0A0C10",
+  "navigationColor": "#0A0C10",
+  "backgroundColor": "#0A0C10",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://nexus-boost.com/icon.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./nexus-release-key.jks",
+    "alias": "nexus-alias"
+  }
+}
