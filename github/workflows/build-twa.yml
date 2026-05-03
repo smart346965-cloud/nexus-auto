@@ -18,5 +18,31 @@ jobs:
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
 
-      - name: Verify Installation
-        run: bubblewrap --version
+      - name: Decode Signing Key
+        run: |
+          echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > nexus-release-key.jks
+
+      - name: Build TWA APK & AAB
+        run: |
+          # هنا نقوم بتحديث المنيفست ببيانات العميل القادمة من الـ API
+          sed -i 's/"host": ".*"/"host": "${{ github.event.client_payload.host }}"/' twa-manifest.json
+          sed -i 's/"name": ".*"/"name": "${{ github.event.client_payload.name }}"/' twa-manifest.json
+          
+          # تشغيل عملية البناء الصامتة
+          yes | bubblewrap build --manifest twa-manifest.json \
+            --signingKeyPath nexus-release-key.jks \
+            --signingKeyAlias "${{ secrets.KEY_ALIAS }}" \
+            --signingKeyPassword "${{ secrets.KEY_STORE_PASSWORD }}" \
+            --signingKeyStorePassword "${{ secrets.KEY_STORE_PASSWORD }}"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: nexus-app-apk
+          path: ./*.apk
+
+      - name: Upload AAB (For Play Store)
+        uses: actions/upload-artifact@v3
+        with:
+          name: nexus-app-bundle
+          path: ./*.aab
