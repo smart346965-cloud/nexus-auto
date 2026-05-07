@@ -1,5 +1,5 @@
 {
-  "packageId": "com.nexus.boost.app",
+  "packageId": "com.nexus.dynamicapp",
   "host": "nexus-boost.com",
   "name": "Nexus Boost App",
   "launcherName": "NexusBoost",
@@ -7,12 +7,15 @@
   "themeColor": "#0A0C10",
   "navigationColor": "#0A0C10",
   "backgroundColor": "#0A0C10",
-  "enableNotifications": true,
   "startUrl": "/",
   "iconUrl": "https://nexus-boost.com/icon.png",
+  "maskableIconUrl": "https://nexus-boost.com/icon.png",
+  "enableNotifications": true,
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
     "path": "./nexus-release-key.jks",
     "alias": "nexus-alias"
-  }
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1
 }
