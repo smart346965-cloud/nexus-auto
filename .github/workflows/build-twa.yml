@@ -23,12 +23,19 @@ jobs:
           echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > nexus-release-key.jks
 
       - name: Build TWA APK & AAB
+        env:
+          CLIENT_URL: ${{ github.event.client_payload.url }}
+          CLIENT_NAME: ${{ github.event.client_payload.name }}
         run: |
-          # استخدمنا العلامة | بدلاً من / لتجنب تعارض الروابط
-          sed -i "s|'host': '.*'|'host': '${{ github.event.client_payload.url }}'|" twa-manifest.json
-          sed -i "s|'name': '.*'|'name': '${{ github.event.client_payload.name }}'|" twa-manifest.json
+          # 1. تحديث المنيفست باستخدام متغيرات البيئة (أكثر أماناً واستقراراً)
+          sed -i "s|\"host\": \".*\"|\"host\": \"$CLIENT_URL\"|" twa-manifest.json
+          sed -i "s|\"name\": \".*\"|\"name\": \"$CLIENT_NAME\"|" twa-manifest.json
           
-          # تأكد من وجود ملف الإعدادات قبل البدء
+          # 2. طباعة المنيفست للتأكد (اختياري للتصحيح)
+          cat twa-manifest.json
+          
+          # 3. تشغيل عملية البناء الصامتة
+          # ملاحظة: تم إزالة yes واستخدام الأعلام البرمجية الصحيحة
           bubblewrap build --manifest twa-manifest.json \
             --signingKeyPath nexus-release-key.jks \
             --signingKeyAlias "${{ secrets.KEY_ALIAS }}" \
