@@ -24,16 +24,17 @@ jobs:
 
       - name: Build TWA APK & AAB
         run: |
-          # هنا نقوم بتحديث المنيفست ببيانات العميل القادمة من الـ API
-          sed -i 's/"host": ".*"/"host": "${{ github.event.client_payload.url }}"/' twa-manifest.json
-          sed -i 's/"name": ".*"/"name": "${{ github.event.client_payload.name }}"/' twa-manifest.json
+          # استخدمنا العلامة | بدلاً من / لتجنب تعارض الروابط
+          sed -i "s|'host': '.*'|'host': '${{ github.event.client_payload.url }}'|" twa-manifest.json
+          sed -i "s|'name': '.*'|'name': '${{ github.event.client_payload.name }}'|" twa-manifest.json
           
-          # تشغيل عملية البناء الصامتة
-          yes | bubblewrap build --manifest twa-manifest.json \
+          # تأكد من وجود ملف الإعدادات قبل البدء
+          bubblewrap build --manifest twa-manifest.json \
             --signingKeyPath nexus-release-key.jks \
             --signingKeyAlias "${{ secrets.KEY_ALIAS }}" \
             --signingKeyPassword "${{ secrets.KEY_STORE_PASSWORD }}" \
-            --signingKeyStorePassword "${{ secrets.KEY_STORE_PASSWORD }}"
+            --signingKeyStorePassword "${{ secrets.KEY_STORE_PASSWORD }}" \
+            --skipConfig
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
