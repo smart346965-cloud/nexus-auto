@@ -1,4 +1,3 @@
-
 name: Nexus Auto-Build Engine
 on:
   repository_dispatch:
@@ -23,42 +22,37 @@ jobs:
         run: |
           echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > nexus-release-key.jks
 
-      - name: 🔍 Smart Debug & Nexus Build
+      - name: ☕ Setup Java (The Pro Way)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 🔍 Smart Debug & Nexus Prep
         env:
           CLIENT_URL: ${{ github.event.client_payload.url }}
           CLIENT_NAME: ${{ github.event.client_payload.name }}
         run: |
-          echo "🚀 بدء عملية تحليل النظام..."
-          
-          # 1. فحص وجود الملفات الأساسية
-          if [ ! -f "twa-manifest.json" ]; then echo "❌ خطأ: ملف twa-manifest.json غير موجود في الجذر!"; exit 1; fi
-          if [ ! -f "nexus-release-key.jks" ]; then echo "❌ خطأ: فشل فك تشفير مفتاح التوقيع (JKS)!"; exit 1; fi
-          
-          # 2. تنظيف الرابط باستخدام sed
+          # تنظيف الرابط واستخراج الدومين
           CLEAN_HOST=$(echo "$CLIENT_URL" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
-          echo "✅ الدومين المستخرج: $CLEAN_HOST"
           
-          # 3. تحديث manifest بشكل آمن باستخدام jq
-          jq --arg host "$CLEAN_HOST" \
-             --arg name "$CLIENT_NAME" \
-             '.host = $host | .name = $name' \
-             twa-manifest.json > temp.json
+          # تحديث المنيفست باستخدام jq (تأكد أن jq مثبت، وهو كذلك افتراضياً في GitHub)
+          jq --arg host "$CLEAN_HOST" --arg name "$CLIENT_NAME" \
+             '.host = $host | .name = $name' twa-manifest.json > temp.json && mv temp.json twa-manifest.json
           
-          mv temp.json twa-manifest.json
-          
-          # 4. فحص محتوى الملف بعد التعديل
-          echo "📝 فحص محتوى المنيفست النهائي:"
-          cat twa-manifest.json
+          # إنشاء ملف إعدادات bubblewrap صامت لمنع الأسئلة التفاعلية
+          mkdir -p ~/.bubblewrap
+          echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
 
-      - name: 🏗️ Final Build Execution
+      - name: 🏗️ Final Build Execution (Silent Mode)
         run: |
-          # نستخدم أمر yes لإعطاء حرف y تلقائياً لكل الأسئلة التفاعلية
-          yes | bubblewrap build --manifest twa-manifest.json \
+          # الآن البناء سيعمل مباشرة بدون أي أسئلة تفاعلية
+          bubblewrap build --manifest twa-manifest.json \
             --signingKeyPath nexus-release-key.jks \
             --signingKeyAlias "${{ secrets.KEY_ALIAS }}" \
             --signingKeyPassword "${{ secrets.KEY_STORE_PASSWORD }}" \
             --signingKeyStorePassword "${{ secrets.KEY_STORE_PASSWORD }}" \
-            --skipConfig
+            --skipConfig --no-prompt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
