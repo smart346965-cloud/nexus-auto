@@ -43,9 +43,15 @@ jobs:
           mkdir -p ~/.bubblewrap
           echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
 
-      - name: 🏗️ Final Build Execution (Silent Mode)
+      - name: 🏗️ Final Build Execution (Professional Automation)
         run: |
-          bubblewrap build --manifest twa-manifest.json \
+          # 1. تحديث المشروع أولاً لاعتماد التعديلات التي أجريناها عبر jq وتوليد ملف الـ checksum
+          # نستخدم --skipConfig لتجنب الأسئلة التفاعلية أثناء التحديث
+          bubblewrap update --manifest twa-manifest.json --skipConfig
+          
+          # 2. تشغيل البناء النهائي
+          # أضفنا أمر yes | للتأكيد النهائي في حال ظهر أي سؤال غير متوقع رغم وجود الأعلام البرمجية
+          yes no | bubblewrap build --manifest twa-manifest.json \
             --signingKeyPath nexus-release-key.jks \
             --signingKeyAlias "${{ secrets.KEY_ALIAS }}" \
             --signingKeyPassword "${{ secrets.KEY_STORE_PASSWORD }}" \
