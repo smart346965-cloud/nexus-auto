@@ -33,13 +33,17 @@ jobs:
           if [ ! -f "twa-manifest.json" ]; then echo "❌ خطأ: ملف twa-manifest.json غير موجود في الجذر!"; exit 1; fi
           if [ ! -f "nexus-release-key.jks" ]; then echo "❌ خطأ: فشل فك تشفير مفتاح التوقيع (JKS)!"; exit 1; fi
           
-          # 2. تنظيف الرابط وتجهيز البيانات
-          CLEAN_HOST=$(echo $CLIENT_URL | sed -e 's|^[^/]*//||' -e 's|/.*$||')
+          # 2. تنظيف الرابط باستخدام jq (آمن وموثوق)
+          CLEAN_HOST=$(echo "$CLIENT_URL" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
           echo "✅ الدومين المستخرج: $CLEAN_HOST"
           
-          # 3. محاولة تحديث الملف مع فحص الأخطاء
-          sed -i "s|\"host\": \".*\"|\"host\": \"$CLEAN_HOST\"|" twa-manifest.json || { echo "❌ فشل تحديث host"; exit 1; }
-          sed -i "s|\"name\": \".*\"|\"name\": \"$CLIENT_NAME\"|" twa-manifest.json || { echo "❌ فشل تحديث name"; exit 1; }
+          # 3. تحديث manifest بشكل آمن باستخدام jq
+          jq --arg host "$CLEAN_HOST" \
+             --arg name "$CLIENT_NAME" \
+             '.host = $host | .name = $name' \
+             twa-manifest.json > temp.json
+          
+          mv temp.json twa-manifest.json
           
           # 4. فحص محتوى الملف بعد التعديل (للتأكد بصرياً)
           echo "📝 فحص محتوى المنيفست النهائي:"
