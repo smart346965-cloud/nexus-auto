@@ -1,15 +1,56 @@
-      - name: 🏗️ Final Build (Clean & Dynamic Signing)
+name: Nexus Auto-Build Engine
+on:
+  repository_dispatch:
+    types: [build_app] # هذا يجب أن يطابق event_type في كود React
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: ☕ Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: 🔑 Prepare Signing Key
+        run: |
+          # فك تشفير المفتاح الذي يعتمد عليه build.gradle الخاص بك
+          echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > nexus-release-key.jks
+
+      - name: 🧠 Inject Client Data (Properties)
         env:
-          # جلب البيانات من Secrets
+          URL: ${{ github.event.client_payload.url }}
+          NAME: ${{ github.event.client_payload.name }}
+        run: |
+          # توليد الملف الذي يقرأ منه ملف build.gradle الخاص بك
+          cat <<EOF > client-config.properties
+          CLIENT_URL=$URL
+          APP_NAME=$NAME
+          PACKAGE_NAME=com.nexus.app$(date +%s)
+          THEME_COLOR=#0EA5E9
+          IS_LIGHT_BG=false
+          EOF
+
+      - name: 🏗️ Final Build (Dynamic Signing)
+        env:
           KEY_PASS: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           chmod +x ./gradlew
-          
-          # إرسال بيانات التوقيع كـ Parameters مباشرة للمحرك
-          # هذه الطريقة تتجاوز أي إعدادات داخل الكود وتمنع التضارب
+          # تمرير التوقيع كـ Parameters لتجنب أي تضارب مع الكود النظيف
           ./gradlew assembleRelease \
             -Pandroid.signingConfigs.release.storeFile=$(pwd)/nexus-release-key.jks \
             -Pandroid.signingConfigs.release.storePassword=$KEY_PASS \
             -Pandroid.signingConfigs.release.keyAlias=$KEY_ALIAS \
             -Pandroid.signingConfigs.release.keyPassword=$KEY_PASS
+
+      - name: 📦 Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.client_payload.name }}-APK
+          path: app/build/outputs/apk/release/*.apk
