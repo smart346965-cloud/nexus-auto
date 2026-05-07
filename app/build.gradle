@@ -1,0 +1,65 @@
+plugins {
+    alias(libs.plugins.androidApplication)
+}
+
+// 👑 1. قراءة ملف إعدادات العميل من المجلد الرئيسي (Root)
+def clientProps = new Properties()
+def propsFile = rootProject.file("client-config.properties")
+if (propsFile.exists()) {
+    clientProps.load(new FileInputStream(propsFile))
+} else {
+    throw new GradleException("❌ FATAL: client-config.properties not found in root directory!")
+}
+
+android {
+    namespace 'com.example.mytwa_smart' // هذا يبقى ثابتاً للكود الداخلي
+    compileSdk 34
+
+    defaultConfig {
+        // 👑 2. تغيير هوية التطبيق (Package Name) ديناميكياً لكل عميل!
+        applicationId clientProps['PACKAGE_NAME']
+
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // 👑 3. حقن الرابط واسم التطبيق إلى الـ Manifest
+        manifestPlaceholders = [
+                clientUrl: clientProps['CLIENT_URL'],
+                appName: clientProps['APP_NAME']
+        ]
+
+        // 👑 4. توليد الألوان ديناميكياً
+        resValue "color", "splash_bg_color", clientProps['THEME_COLOR']
+        resValue "color", "status_bar_color", clientProps['THEME_COLOR']
+        resValue "color", "navigation_bar_color", clientProps['THEME_COLOR']
+
+        // 👑 5. الحماية الجراحية: تحويل النص إلى Boolean صريح
+        resValue "bool", "is_light_bg", clientProps['IS_LIGHT_BG'].toBoolean() ? "true" : "false"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    implementation libs.appcompat
+    implementation libs.material
+    implementation libs.activity
+    implementation libs.constraintlayout
+    testImplementation libs.junit
+    androidTestImplementation libs.ext.junit
+    androidTestImplementation libs.espresso.core
+    implementation libs.androidbrowserhelper
+    implementation libs.onesignal
+}
