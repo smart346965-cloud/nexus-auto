@@ -2,6 +2,7 @@ name: Nexus Auto-Build Engine (Production)
 on:
   repository_dispatch:
     types: [build_app]
+  workflow_dispatch: # هذا السطر السحري هو الذي يظهر زر التشغيل اليدوي
 
 jobs:
   build:
