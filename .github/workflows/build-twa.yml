@@ -27,15 +27,14 @@ jobs:
           CLIENT_URL: ${{ github.event.client_payload.url }}
           CLIENT_NAME: ${{ github.event.client_payload.name }}
         run: |
-          # 1. تحديث المنيفست باستخدام متغيرات البيئة (أكثر أماناً واستقراراً)
-          sed -i "s|\"host\": \".*\"|\"host\": \"$CLIENT_URL\"|" twa-manifest.json
+          # 1. استخراج الـ Host فقط من الرابط (لأن المنيفست يحتاج الدومين فقط بدون https)
+          CLEAN_HOST=$(echo $CLIENT_URL | sed -e 's|^[^/]*//||' -e 's|/.*$||')
+          
+          # 2. تحديث المنيفست (تأكد من استخدام المزدوجة " وليس المفردة ')
+          sed -i "s|\"host\": \".*\"|\"host\": \"$CLEAN_HOST\"|" twa-manifest.json
           sed -i "s|\"name\": \".*\"|\"name\": \"$CLIENT_NAME\"|" twa-manifest.json
           
-          # 2. طباعة المنيفست للتأكد (اختياري للتصحيح)
-          cat twa-manifest.json
-          
-          # 3. تشغيل عملية البناء الصامتة
-          # ملاحظة: تم إزالة yes واستخدام الأعلام البرمجية الصحيحة
+          # 3. تشغيل البناء مع تجاوز الأسئلة التفاعلية
           bubblewrap build --manifest twa-manifest.json \
             --signingKeyPath nexus-release-key.jks \
             --signingKeyAlias "${{ secrets.KEY_ALIAS }}" \
