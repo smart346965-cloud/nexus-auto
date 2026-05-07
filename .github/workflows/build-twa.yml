@@ -1,65 +1,15 @@
-name: Nexus Auto-Build Engine (Production)
-on:
-  repository_dispatch:
-    types: [build_app]
-  workflow_dispatch: # هذا السطر السحري هو الذي يظهر زر التشغيل اليدوي
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: 📥 Checkout Code
-        uses: actions/checkout@v4
-
-      - name: ☕ Setup Java (The Pro Way)
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          # تفعيل الكاش لتسريع البناء في المرات القادمة
-          cache: 'gradle'
-
-      - name: 🤖 Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          build-tools: "34.0.0"
-
-      - name: 🛠️ Nexus Engine: Inject Client Data
+      - name: 🏗️ Final Build (Clean & Dynamic Signing)
         env:
-          CLIENT_URL: ${{ github.event.client_payload.url }}
-          CLIENT_NAME: ${{ github.event.client_payload.name }}
+          # جلب البيانات من Secrets
+          KEY_PASS: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          # 1. تنظيف الرابط
-          CLEAN_HOST=$(echo "$CLIENT_URL" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
+          chmod +x ./gradlew
           
-          # 2. تحديث المنيفست بالبيانات الجديدة للعميل
-          jq --arg host "$CLEAN_HOST" --arg name "$CLIENT_NAME" \
-             '.host = $host | .name = $name' twa-manifest.json > temp.json && mv temp.json twa-manifest.json
-          
-          # 3. مزامنة القالب المرفوع مع البيانات الجديدة (صامت وبدون أسئلة)
-          # بما أن المجلدات (app, gradle) موجودة، سيقوم فقط بتحديث الإعدادات
-          npx @bubblewrap/cli update --skipConfig
-
-      - name: 🏗️ Final Build Execution (The Professional Way)
-        run: |
-          # منح صلاحية التشغيل للمحرك
-          chmod +x gradlew
-          
-          # البناء مباشرة باستخدام Gradle (أسرع وأضمن طريقة في العالم)
+          # إرسال بيانات التوقيع كـ Parameters مباشرة للمحرك
+          # هذه الطريقة تتجاوز أي إعدادات داخل الكود وتمنع التضارب
           ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=../nexus-key/nexus-final-key.jks \
-            -Pandroid.injected.signing.store.password=${{ secrets.KEY_STORE_PASSWORD }} \
-            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
-            -Pandroid.injected.signing.key.password=${{ secrets.KEY_STORE_PASSWORD }}
-
-      - name: 📦 Upload Final APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: nexus-app-apk
-          path: app/build/outputs/apk/release/*.apk
-
-      - name: 📦 Upload Final AAB (Play Store)
-        uses: actions/upload-artifact@v4
-        with:
-          name: nexus-app-bundle
-          path: app/build/outputs/bundle/release/*.aab
+            -Pandroid.signingConfigs.release.storeFile=$(pwd)/nexus-release-key.jks \
+            -Pandroid.signingConfigs.release.storePassword=$KEY_PASS \
+            -Pandroid.signingConfigs.release.keyAlias=$KEY_ALIAS \
+            -Pandroid.signingConfigs.release.keyPassword=$KEY_PASS
