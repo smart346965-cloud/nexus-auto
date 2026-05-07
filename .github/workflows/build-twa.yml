@@ -22,25 +22,37 @@ jobs:
         run: |
           echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > nexus-release-key.jks
 
-      - name: Build TWA APK & AAB
+      - name: 🔍 Smart Debug & Nexus Build
         env:
           CLIENT_URL: ${{ github.event.client_payload.url }}
           CLIENT_NAME: ${{ github.event.client_payload.name }}
         run: |
-          # 1. استخراج الـ Host فقط من الرابط (لأن المنيفست يحتاج الدومين فقط بدون https)
+          echo "🚀 بدء عملية تحليل النظام..."
+          
+          # 1. فحص وجود الملفات الأساسية
+          if [ ! -f "twa-manifest.json" ]; then echo "❌ خطأ: ملف twa-manifest.json غير موجود في الجذر!"; exit 1; fi
+          if [ ! -f "nexus-release-key.jks" ]; then echo "❌ خطأ: فشل فك تشفير مفتاح التوقيع (JKS)!"; exit 1; fi
+          
+          # 2. تنظيف الرابط وتجهيز البيانات
           CLEAN_HOST=$(echo $CLIENT_URL | sed -e 's|^[^/]*//||' -e 's|/.*$||')
+          echo "✅ الدومين المستخرج: $CLEAN_HOST"
           
-          # 2. تحديث المنيفست (تأكد من استخدام المزدوجة " وليس المفردة ')
-          sed -i "s|\"host\": \".*\"|\"host\": \"$CLEAN_HOST\"|" twa-manifest.json
-          sed -i "s|\"name\": \".*\"|\"name\": \"$CLIENT_NAME\"|" twa-manifest.json
+          # 3. محاولة تحديث الملف مع فحص الأخطاء
+          sed -i "s|\"host\": \".*\"|\"host\": \"$CLEAN_HOST\"|" twa-manifest.json || { echo "❌ فشل تحديث host"; exit 1; }
+          sed -i "s|\"name\": \".*\"|\"name\": \"$CLIENT_NAME\"|" twa-manifest.json || { echo "❌ فشل تحديث name"; exit 1; }
           
-          # 3. تشغيل البناء مع تجاوز الأسئلة التفاعلية
+          # 4. فحص محتوى الملف بعد التعديل (للتأكد بصرياً)
+          echo "📝 فحص محتوى المنيفست النهائي:"
+          cat twa-manifest.json
+          
+          # 5. تشغيل البناء مع تفعيل خاصية الـ Verbose (التفصيل الممل)
+          echo "🏗️ بدء بناء التطبيق..."
           bubblewrap build --manifest twa-manifest.json \
             --signingKeyPath nexus-release-key.jks \
             --signingKeyAlias "${{ secrets.KEY_ALIAS }}" \
             --signingKeyPassword "${{ secrets.KEY_STORE_PASSWORD }}" \
             --signingKeyStorePassword "${{ secrets.KEY_STORE_PASSWORD }}" \
-            --skipConfig
+            --skipConfig --verbose
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
