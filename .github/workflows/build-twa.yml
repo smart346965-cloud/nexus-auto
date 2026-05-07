@@ -35,27 +35,54 @@ jobs:
           CLIENT_URL: ${{ github.event.client_payload.url }}
           CLIENT_NAME: ${{ github.event.client_payload.name }}
         run: |
+          set -euxo pipefail
+
           CLEAN_HOST=$(echo "$CLIENT_URL" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
-          
-          jq --arg host "$CLEAN_HOST" --arg name "$CLIENT_NAME" \
-             '.host = $host | .name = $name' twa-manifest.json > temp.json && mv temp.json twa-manifest.json
-          
+
+          SAFE_PACKAGE=$(echo "$CLEAN_HOST" | tr '.' '_' | tr '-' '_')
+
+          PACKAGE_ID="com.nexus.${SAFE_PACKAGE}"
+
+          echo "Host: $CLEAN_HOST"
+          echo "Package: $PACKAGE_ID"
+
+          jq \
+            --arg host "$CLEAN_HOST" \
+            --arg name "$CLIENT_NAME" \
+            --arg package "$PACKAGE_ID" \
+            '.host = $host |
+             .name = $name |
+             .launcherName = $name |
+             .packageId = $package |
+             .appVersionName = "1.0.0" |
+             .appVersionCode = 1' \
+             twa-manifest.json > temp.json
+
+          mv temp.json twa-manifest.json
+
+          echo "========== FINAL MANIFEST =========="
+          cat twa-manifest.json
+
           mkdir -p ~/.bubblewrap
+
           echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
 
-      - name: 🏗️ Final Build Execution (Fully Autonomous)
+      - name: Decode Signing Key
         run: |
-          # 1. استخدام "printf" لإرسال إجابات مرتبة مسبقاً لكل الأسئلة المحتملة
-          # نرسل: \n (للموافقة على الإصدار الافتراضي) ثم "no" (للسؤال السابق)
-          printf "\n\nno\n" | bubblewrap update --manifest twa-manifest.json --skipConfig
-          
-          # 2. البناء النهائي مع تعطيل كافة التنبيهات
+          echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > nexus-release-key.jks
+
+      - name: 🏗️ Final Build Execution
+        run: |
+          set -euxo pipefail
+
+          echo "🚀 Nexus Build Started"
+
           bubblewrap build --manifest twa-manifest.json \
             --signingKeyPath nexus-release-key.jks \
             --signingKeyAlias "${{ secrets.KEY_ALIAS }}" \
             --signingKeyPassword "${{ secrets.KEY_STORE_PASSWORD }}" \
             --signingKeyStorePassword "${{ secrets.KEY_STORE_PASSWORD }}" \
-            --skipConfig --no-prompt
+            --skipConfig
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
