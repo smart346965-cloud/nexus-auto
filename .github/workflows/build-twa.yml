@@ -18,35 +18,33 @@ jobs:
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
 
-      - name: Decode Signing Key
-        run: |
-          echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > nexus-release-key.jks
-
       - name: ☕ Setup Java (The Pro Way)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: 🤖 Setup Android SDK (NEW SOLUTION)
+        uses: android-actions/setup-android@v3
+        with:
+          build-tools: "34.0.0"
+          api-level: "34"
+
       - name: 🔍 Smart Debug & Nexus Prep
         env:
           CLIENT_URL: ${{ github.event.client_payload.url }}
           CLIENT_NAME: ${{ github.event.client_payload.name }}
         run: |
-          # تنظيف الرابط واستخراج الدومين
           CLEAN_HOST=$(echo "$CLIENT_URL" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
           
-          # تحديث المنيفست باستخدام jq (تأكد أن jq مثبت، وهو كذلك افتراضياً في GitHub)
           jq --arg host "$CLEAN_HOST" --arg name "$CLIENT_NAME" \
              '.host = $host | .name = $name' twa-manifest.json > temp.json && mv temp.json twa-manifest.json
           
-          # إنشاء ملف إعدادات bubblewrap صامت لمنع الأسئلة التفاعلية
           mkdir -p ~/.bubblewrap
           echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
 
       - name: 🏗️ Final Build Execution (Silent Mode)
         run: |
-          # الآن البناء سيعمل مباشرة بدون أي أسئلة تفاعلية
           bubblewrap build --manifest twa-manifest.json \
             --signingKeyPath nexus-release-key.jks \
             --signingKeyAlias "${{ secrets.KEY_ALIAS }}" \
