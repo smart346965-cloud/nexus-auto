@@ -1,3 +1,4 @@
+
 name: Nexus Auto-Build Engine
 on:
   repository_dispatch:
@@ -33,7 +34,7 @@ jobs:
           if [ ! -f "twa-manifest.json" ]; then echo "❌ خطأ: ملف twa-manifest.json غير موجود في الجذر!"; exit 1; fi
           if [ ! -f "nexus-release-key.jks" ]; then echo "❌ خطأ: فشل فك تشفير مفتاح التوقيع (JKS)!"; exit 1; fi
           
-          # 2. تنظيف الرابط باستخدام jq (آمن وموثوق)
+          # 2. تنظيف الرابط باستخدام sed
           CLEAN_HOST=$(echo "$CLIENT_URL" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
           echo "✅ الدومين المستخرج: $CLEAN_HOST"
           
@@ -45,18 +46,19 @@ jobs:
           
           mv temp.json twa-manifest.json
           
-          # 4. فحص محتوى الملف بعد التعديل (للتأكد بصرياً)
+          # 4. فحص محتوى الملف بعد التعديل
           echo "📝 فحص محتوى المنيفست النهائي:"
           cat twa-manifest.json
-          
-          # 5. تشغيل البناء مع تفعيل خاصية الـ Verbose (التفصيل الممل)
-          echo "🏗️ بدء بناء التطبيق..."
-          bubblewrap build --manifest twa-manifest.json \
+
+      - name: 🏗️ Final Build Execution
+        run: |
+          # نستخدم أمر yes لإعطاء حرف y تلقائياً لكل الأسئلة التفاعلية
+          yes | bubblewrap build --manifest twa-manifest.json \
             --signingKeyPath nexus-release-key.jks \
             --signingKeyAlias "${{ secrets.KEY_ALIAS }}" \
             --signingKeyPassword "${{ secrets.KEY_STORE_PASSWORD }}" \
             --signingKeyStorePassword "${{ secrets.KEY_STORE_PASSWORD }}" \
-            --skipConfig --verbose
+            --skipConfig
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
