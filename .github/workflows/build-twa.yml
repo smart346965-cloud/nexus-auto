@@ -1,4 +1,4 @@
-name: Nexus Auto-Build Engine
+name: Nexus Auto-Build Engine (Production)
 on:
   repository_dispatch:
     types: [build_app]
@@ -7,91 +7,58 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: 📥 Checkout Code
         uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli
 
       - name: ☕ Setup Java (The Pro Way)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          # تفعيل الكاش لتسريع البناء في المرات القادمة
+          cache: 'gradle'
 
-      - name: 🤖 Setup Android SDK (NEW SOLUTION)
+      - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
           build-tools: "34.0.0"
-          api-level: "34"
 
-      - name: 🔍 Smart Debug & Nexus Prep
+      - name: 🛠️ Nexus Engine: Inject Client Data
         env:
           CLIENT_URL: ${{ github.event.client_payload.url }}
           CLIENT_NAME: ${{ github.event.client_payload.name }}
         run: |
-          set -euxo pipefail
-
+          # 1. تنظيف الرابط
           CLEAN_HOST=$(echo "$CLIENT_URL" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
+          
+          # 2. تحديث المنيفست بالبيانات الجديدة للعميل
+          jq --arg host "$CLEAN_HOST" --arg name "$CLIENT_NAME" \
+             '.host = $host | .name = $name' twa-manifest.json > temp.json && mv temp.json twa-manifest.json
+          
+          # 3. مزامنة القالب المرفوع مع البيانات الجديدة (صامت وبدون أسئلة)
+          # بما أن المجلدات (app, gradle) موجودة، سيقوم فقط بتحديث الإعدادات
+          npx @bubblewrap/cli update --skipConfig
 
-          SAFE_PACKAGE=$(echo "$CLEAN_HOST" | tr '.' '_' | tr '-' '_')
-
-          PACKAGE_ID="com.nexus.${SAFE_PACKAGE}"
-
-          echo "Host: $CLEAN_HOST"
-          echo "Package: $PACKAGE_ID"
-
-          jq \
-            --arg host "$CLEAN_HOST" \
-            --arg name "$CLIENT_NAME" \
-            --arg package "$PACKAGE_ID" \
-            '.host = $host |
-             .name = $name |
-             .launcherName = $name |
-             .packageId = $package |
-             .appVersionName = "1.0.0" |
-             .appVersionCode = 1' \
-             twa-manifest.json > temp.json
-
-          mv temp.json twa-manifest.json
-
-          echo "========== FINAL MANIFEST =========="
-          cat twa-manifest.json
-
-          mkdir -p ~/.bubblewrap
-
-          echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
-
-      - name: Decode Signing Key
+      - name: 🏗️ Final Build Execution (The Professional Way)
         run: |
-          echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > nexus-release-key.jks
+          # منح صلاحية التشغيل للمحرك
+          chmod +x gradlew
+          
+          # البناء مباشرة باستخدام Gradle (أسرع وأضمن طريقة في العالم)
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=../nexus-key/nexus-final-key.jks \
+            -Pandroid.injected.signing.store.password=${{ secrets.KEY_STORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ secrets.KEY_STORE_PASSWORD }}
 
-      - name: 🏗️ Final Build Execution
-        run: |
-          set -euxo pipefail
-
-          echo "🚀 Nexus Build Started"
-
-          bubblewrap build --manifest twa-manifest.json \
-            --signingKeyPath nexus-release-key.jks \
-            --signingKeyAlias "${{ secrets.KEY_ALIAS }}" \
-            --signingKeyPassword "${{ secrets.KEY_STORE_PASSWORD }}" \
-            --signingKeyStorePassword "${{ secrets.KEY_STORE_PASSWORD }}" \
-            --skipConfig
-
-      - name: Upload APK
+      - name: 📦 Upload Final APK
         uses: actions/upload-artifact@v4
         with:
           name: nexus-app-apk
-          path: ./*.apk
+          path: app/build/outputs/apk/release/*.apk
 
-      - name: Upload AAB (For Play Store)
+      - name: 📦 Upload Final AAB (Play Store)
         uses: actions/upload-artifact@v4
         with:
           name: nexus-app-bundle
-          path: ./*.aab
+          path: app/build/outputs/bundle/release/*.aab
