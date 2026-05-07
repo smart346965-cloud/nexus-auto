@@ -1,7 +1,18 @@
 name: Nexus Auto-Build Engine
+
 on:
   repository_dispatch:
-    types: [build_app] # هذا يجب أن يطابق event_type في كود React
+    types: [build_app]
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'رابط الموقع'
+        required: true
+        default: 'https://example.com'
+      name:
+        description: 'اسم التطبيق'
+        required: true
+        default: 'Nexus App'
 
 jobs:
   build:
@@ -10,47 +21,52 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: ☕ Setup Java
+      - name: ☕ Setup Java & Android
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
           java-version: '17'
+          distribution: 'temurin'
           cache: 'gradle'
+
+      # --- السطر السحري: جلب القالب النظيف ---
+      - name: 🛠️ Setup Professional TWA Template
+        run: |
+          git clone https://github.com/GoogleChromeLabs/bubblewrap.git temp-build
+          cp -r temp-build/packages/cli/test/data/project/* .
+          rm -rf temp-build
+
+      - name: 🧠 Logic: Inject Client Data
+        env:
+          CLIENT_URL: ${{ github.event.inputs.url || github.event.client_payload.url }}
+          CLIENT_NAME: ${{ github.event.inputs.name || github.event.client_payload.name }}
+        run: |
+          # استخراج الدومين وتنظيف البيانات
+          CLEAN_HOST=$(echo "$CLIENT_URL" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
+          
+          # تعديل ملف twa-manifest.json (قلب تطبيق الـ TWA)
+          jq --arg url "$CLIENT_URL" \
+             --arg name "$CLIENT_NAME" \
+             --arg host "$CLEAN_HOST" \
+             '.host = $host | .name = $name | .launcherName = $name | .startUrl = "/"' \
+             twa-manifest.json > temp.json && mv temp.json twa-manifest.json
 
       - name: 🔑 Prepare Signing Key
         run: |
-          # فك تشفير المفتاح الذي يعتمد عليه build.gradle الخاص بك
+          # فك تشفير مفتاحك الخاص (يجب أن يكون مخزناً كـ Base64 في Secrets)
           echo "${{ secrets.SIGNING_KEY_STORE_BASE64 }}" | base64 --decode > nexus-release-key.jks
 
-      - name: 🧠 Inject Client Data (Properties)
-        env:
-          URL: ${{ github.event.client_payload.url }}
-          NAME: ${{ github.event.client_payload.name }}
+      - name: 🏗️ Pro Build (The Clean Execution)
         run: |
-          # توليد الملف الذي يقرأ منه ملف build.gradle الخاص بك
-          cat <<EOF > client-config.properties
-          CLIENT_URL=$URL
-          APP_NAME=$NAME
-          PACKAGE_NAME=com.nexus.app$(date +%s)
-          THEME_COLOR=#0EA5E9
-          IS_LIGHT_BG=false
-          EOF
-
-      - name: 🏗️ Final Build (Dynamic Signing)
-        env:
-          KEY_PASS: ${{ secrets.KEY_STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-        run: |
-          chmod +x ./gradlew
-          # تمرير التوقيع كـ Parameters لتجنب أي تضارب مع الكود النظيف
+          chmod +x gradlew
+          # تشغيل البناء وتوقيعه برمجياً
           ./gradlew assembleRelease \
             -Pandroid.signingConfigs.release.storeFile=$(pwd)/nexus-release-key.jks \
-            -Pandroid.signingConfigs.release.storePassword=$KEY_PASS \
-            -Pandroid.signingConfigs.release.keyAlias=$KEY_ALIAS \
-            -Pandroid.signingConfigs.release.keyPassword=$KEY_PASS
+            -Pandroid.signingConfigs.release.storePassword=${{ secrets.KEY_STORE_PASSWORD }} \
+            -Pandroid.signingConfigs.release.keyAlias=${{ secrets.KEY_ALIAS }} \
+            -Pandroid.signingConfigs.release.keyPassword=${{ secrets.KEY_STORE_PASSWORD }}
 
-      - name: 📦 Upload Artifacts
+      - name: 📦 Delivery: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.name }}-APK
+          name: ${{ github.event.inputs.name || github.event.client_payload.name }}-APK
           path: app/build/outputs/apk/release/*.apk
